@@ -19,7 +19,7 @@ var timeout string
 func init() {
 	flag.StringVar(&timeout, "timeout", "1s", "overall timeout for http requests")
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s [URL ...]\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: httpcheck [URL ...]\n")
 		flag.PrintDefaults()
 	}
 }
@@ -35,20 +35,26 @@ func main() {
 
 	client = http.Client{
 		Timeout: timeoutDuration,
+		// Don't follow redirects
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
 	}
 
 	results := make(chan string)
 	var wg sync.WaitGroup
 
-	for _, url := range os.Args[1:] {
+	for _, url := range flag.Args() {
 		wg.Add(1)
 		go func(u string) {
 			defer wg.Done()
+			start := time.Now()
 			msg, err := check(u)
+			elapsed := time.Since(start)
 			if err != nil {
 				results <- fmt.Sprintf("  %-30s : %s", u, ansi.Color(err.Error(), "red"))
 			} else {
-				results <- fmt.Sprintf("  %-30s : %s", u, ansi.Color(msg, "green"))
+				results <- fmt.Sprintf("  %-30s : %s (%s)", u, ansi.Color(msg, "green"), elapsed)
 			}
 		}(url)
 	}
